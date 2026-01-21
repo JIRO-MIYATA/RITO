@@ -1,0 +1,236 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ワクワク計算ドリル</title>
+    <style>
+        :root {
+            --primary-color: #ff6b6b;
+            --secondary-color: #4ecdc4;
+            --bg-color: #f7f9fc;
+            --text-color: #2d3436;
+        }
+
+        body {
+            font-family: "Helvetica Neue", Arial, "Hiragino Kaku Gothic ProN", "Hiragino Sans", Meiryo, sans-serif;
+            background-color: var(--bg-color);
+            color: var(--text-color);
+            margin: 0;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+            touch-action: manipulation;
+        }
+
+        #app {
+            background: white;
+            width: 90%;
+            max-width: 400px;
+            padding: 20px;
+            border-radius: 30px;
+            box-shadow: 0 10px 25px rgba(0,0,0,0.1);
+            text-align: center;
+            border: 6px solid var(--secondary-color);
+        }
+
+        h1 { color: var(--primary-color); font-size: 1.5rem; margin-bottom: 10px; }
+        
+        .progress { font-size: 0.9rem; color: #636e72; margin-bottom: 20px; }
+
+        .question-area {
+            font-size: 3.5rem;
+            font-weight: bold;
+            margin: 20px 0;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            gap: 15px;
+        }
+
+        .answer-display {
+            min-width: 60px;
+            height: 70px;
+            border-bottom: 5px solid var(--primary-color);
+            color: var(--primary-color);
+        }
+
+        /* テンキーのデザイン */
+        .keypad {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 10px;
+            margin-top: 20px;
+        }
+
+        button {
+            background: white;
+            border: 2px solid #dfe6e9;
+            border-radius: 15px;
+            padding: 15px;
+            font-size: 1.5rem;
+            font-weight: bold;
+            cursor: pointer;
+            transition: all 0.1s;
+            box-shadow: 0 4px 0 #dfe6e9;
+        }
+
+        button:active {
+            transform: translateY(4px);
+            box-shadow: none;
+        }
+
+        .btn-enter { background: var(--secondary-color); color: white; border: none; box-shadow: 0 4px 0 #3dbbb3; }
+        .btn-clear { background: #fab1a0; color: white; border: none; box-shadow: 0 4px 0 #e17055; }
+
+        /* フィードバック演出 */
+        #feedback {
+            position: fixed;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            font-size: 8rem;
+            pointer-events: none;
+            opacity: 0;
+            z-index: 100;
+        }
+
+        .pop-animation { animation: pop 0.5s ease-out; }
+        @keyframes pop {
+            0% { transform: translate(-50%, -50%) scale(0.5); opacity: 0; }
+            50% { opacity: 1; }
+            100% { transform: translate(-50%, -50%) scale(1.5); opacity: 0; }
+        }
+
+        .hidden { display: none; }
+        .result-score { font-size: 2rem; margin: 20px 0; color: var(--primary-color); }
+        .btn-restart { background: var(--primary-color); color: white; padding: 15px 30px; font-size: 1.2rem; margin-top: 20px; }
+    </style>
+</head>
+<body>
+
+<div id="app">
+    <div id="start-screen">
+        <h1>ワクワク計算ドリル</h1>
+        <p>10もんの たしざんに ちょうせん！</p>
+        <button class="btn-restart" onclick="startGame()">スタート！</button>
+    </div>
+
+    <div id="quiz-screen" class="hidden">
+        <div class="progress">だい <span id="q-num">1</span> もん / 全10もん</div>
+        <div class="question-area">
+            <span id="num1">0</span> + <span id="num2">0</span> = 
+            <div class="answer-display" id="user-answer"></div>
+        </div>
+
+        <div class="keypad">
+            <button onclick="inputNum(1)">1</button>
+            <button onclick="inputNum(2)">2</button>
+            <button onclick="inputNum(3)">3</button>
+            <button onclick="inputNum(4)">4</button>
+            <button onclick="inputNum(5)">5</button>
+            <button onclick="inputNum(6)">6</button>
+            <button onclick="inputNum(7)">7</button>
+            <button onclick="inputNum(8)">8</button>
+            <button onclick="inputNum(9)">9</button>
+            <button class="btn-clear" onclick="clearNum()">けす</button>
+            <button onclick="inputNum(0)">0</button>
+            <button class="btn-enter" onclick="checkAnswer()">決定</button>
+        </div>
+    </div>
+
+    <div id="result-screen" class="hidden">
+        <h1>おつかれさま！</h1>
+        <div class="result-score"><span id="score">0</span> / 10点</div>
+        <p id="message"></p>
+        <button class="btn-restart" onclick="location.reload()">もういちど やる</button>
+    </div>
+</div>
+
+<div id="feedback"></div>
+
+<script>
+    let currentQuestion = 0;
+    let score = 0;
+    let currentInput = "";
+    let correctAnswer = 0;
+
+    function startGame() {
+        document.getElementById('start-screen').classList.add('hidden');
+        document.getElementById('quiz-screen').classList.remove('hidden');
+        nextQuestion();
+    }
+
+    function nextQuestion() {
+        if (currentQuestion >= 10) {
+            showResult();
+            return;
+        }
+        currentQuestion++;
+        currentInput = "";
+        updateDisplay();
+        
+        // 1桁〜2桁の足し算をランダム生成
+        const n1 = Math.floor(Math.random() * 10) + 1;
+        const n2 = Math.floor(Math.random() * 10) + 1;
+        correctAnswer = n1 + n2;
+
+        document.getElementById('q-num').innerText = currentQuestion;
+        document.getElementById('num1').innerText = n1;
+        document.getElementById('num2').innerText = n2;
+    }
+
+    function inputNum(num) {
+        if (currentInput.length < 3) {
+            currentInput += num.toString();
+            updateDisplay();
+        }
+    }
+
+    function clearNum() {
+        currentInput = "";
+        updateDisplay();
+    }
+
+    function updateDisplay() {
+        document.getElementById('user-answer').innerText = currentInput;
+    }
+
+    function checkAnswer() {
+        if (currentInput === "") return;
+
+        const feedback = document.getElementById('feedback');
+        feedback.classList.remove('pop-animation');
+        void feedback.offsetWidth; // 強制リフロー（アニメーション再発火のため）
+
+        if (parseInt(currentInput) === correctAnswer) {
+            score++;
+            feedback.innerText = "⭕";
+            feedback.style.color = "#ff7675";
+        } else {
+            feedback.innerText = "❌";
+            feedback.style.color = "#0984e3";
+        }
+
+        feedback.classList.add('pop-animation');
+        
+        setTimeout(() => {
+            nextQuestion();
+        }, 600);
+    }
+
+    function showResult() {
+        document.getElementById('quiz-screen').classList.add('hidden');
+        document.getElementById('result-screen').classList.remove('hidden');
+        document.getElementById('score').innerText = score;
+
+        const msg = document.getElementById('message');
+        if (score === 10) msg.innerText = "ぜんもんせいかい！すばらしい！✨";
+        else if (score >= 7) msg.innerText = "すごい！そのちょうし！👍";
+        else msg.innerText = "つぎも がんばろう！😊";
+    }
+</script>
+
+</body>
+</html>
